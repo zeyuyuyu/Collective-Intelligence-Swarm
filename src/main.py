@@ -1,27 +1,36 @@
-import os
-import sys
-import time
 import random
+import networkx as nx
+import numpy as np
 
-from cis.agent import Agent
-from cis.swarm import Swarm
-from cis.environment import Environment
-from cis.communication import CommunicationManager
+class SwarmIntelligence:
+    def __init__(self, num_agents, communication_range):
+        self.num_agents = num_agents
+        self.communication_range = communication_range
+        self.agents = [Agent(i) for i in range(num_agents)]
+        self.graph = self.build_communication_graph()
 
-def main():
-    # Initialize the environment
-    env = Environment()
+    def build_communication_graph(self):
+        G = nx.Graph()
+        G.add_nodes_from(range(self.num_agents))
+        for i in range(self.num_agents):
+            for j in range(i+1, self.num_agents):
+                if np.linalg.norm(self.agents[i].position - self.agents[j].position) <= self.communication_range:
+                    G.add_edge(i, j)
+        return G
 
-    # Create the communication manager
-    comm_manager = CommunicationManager()
+    def run_consensus(self, max_iterations=100):
+        for _ in range(max_iterations):
+            for agent in self.agents:
+                agent.update_state(self.graph)
+        return [agent.state for agent in self.agents]
 
-    # Spawn the agent swarm
-    swarm = Swarm(num_agents=100, env=env, comm_manager=comm_manager)
+class Agent:
+    def __init__(self, id):
+        self.id = id
+        self.state = random.uniform(0, 1)
+        self.position = np.array([random.uniform(-1, 1), random.uniform(-1, 1)])
 
-    # Run the swarm simulation
-    while True:
-        swarm.update()
-        time.sleep(0.1)
-
-if __name__ == '__main__':
-    main()
+    def update_state(self, graph):
+        neighbors = list(graph.neighbors(self.id))
+        if neighbors:
+            self.state = np.mean([self.agents[n].state for n in neighbors])
