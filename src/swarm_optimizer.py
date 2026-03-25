@@ -1,103 +1,45 @@
 import numpy as np
-from typing import Callable, Tuple
 
-class ParticleSwarmOptimizer:
-    def __init__(
-        self,
-        n_particles: int = 30,
-        dimensions: int = 2,
-        c1: float = 2.0,
-        c2: float = 2.0,
-        w: float = 0.7,
-        bounds: Tuple[float, float] = (-1.0, 1.0)
-    ):
-        self.n_particles = n_particles
-        self.dimensions = dimensions
-        self.c1 = c1  # Cognitive coefficient
-        self.c2 = c2  # Social coefficient
-        self.w = w    # Inertia weight
-        self.bounds = bounds
-        
-        # Initialize particle positions and velocities
-        self.positions = np.random.uniform(
-            bounds[0], bounds[1], 
-            (n_particles, dimensions)
-        )
-        self.velocities = np.random.uniform(
-            -1, 1, 
-            (n_particles, dimensions)
-        )
-        
-        # Initialize personal best positions and global best
-        self.pbest_positions = self.positions.copy()
-        self.pbest_scores = np.full(n_particles, np.inf)
-        self.gbest_position = np.zeros(dimensions)
-        self.gbest_score = np.inf
+class SwarmOptimizer:
+    def __init__(self, population_size, num_dimensions, fitness_function):
+        self.population_size = population_size
+        self.num_dimensions = num_dimensions
+        self.fitness_function = fitness_function
+        self.population = self.initialize_population()
+        self.personal_best = self.population.copy()
+        self.global_best = self.population[0].copy()
+        self.velocities = np.zeros((population_size, num_dimensions))
+        self.cognitive_weight = 2.0
+        self.social_weight = 2.0
+        self.inertia_weight = 0.5
 
-    def optimize(
-        self,
-        objective_func: Callable[[np.ndarray], float],
-        max_iterations: int = 100,
-        tolerance: float = 1e-5
-    ) -> Tuple[np.ndarray, float]:
-        """Execute particle swarm optimization algorithm.
-        
-        Args:
-            objective_func: Function to minimize
-            max_iterations: Maximum number of iterations
-            tolerance: Convergence tolerance
-            
-        Returns:
-            Tuple of (best position found, best score found)
-        """
-        prev_best = np.inf
-        
-        for _ in range(max_iterations):
-            # Evaluate current positions
-            scores = np.array([objective_func(p) for p in self.positions])
-            
-            # Update personal bests
-            improved = scores < self.pbest_scores
-            self.pbest_scores[improved] = scores[improved]
-            self.pbest_positions[improved] = self.positions[improved]
-            
-            # Update global best
-            min_score_idx = np.argmin(scores)
-            if scores[min_score_idx] < self.gbest_score:
-                self.gbest_score = scores[min_score_idx]
-                self.gbest_position = self.positions[min_score_idx].copy()
-            
-            # Check convergence
-            if abs(prev_best - self.gbest_score) < tolerance:
-                break
-            prev_best = self.gbest_score
-            
-            # Update velocities and positions
-            r1, r2 = np.random.rand(2)
-            self.velocities = (
-                self.w * self.velocities +
-                self.c1 * r1 * (self.pbest_positions - self.positions) +
-                self.c2 * r2 * (self.gbest_position - self.positions)
-            )
-            
-            self.positions += self.velocities
-            
-            # Enforce bounds
-            self.positions = np.clip(
-                self.positions, 
-                self.bounds[0], 
-                self.bounds[1]
-            )
-            
-        return self.gbest_position, self.gbest_score
+    def initialize_population(self):
+        population = np.random.uniform(-10, 10, (self.population_size, self.num_dimensions))
+        return population
 
-    def reset(self):
-        """Reset the optimizer state."""
-        self.__init__(
-            self.n_particles,
-            self.dimensions,
-            self.c1,
-            self.c2,
-            self.w,
-            self.bounds
-        )
+    def update_velocities(self):
+        r1 = np.random.uniform(0, 1, (self.population_size, self.num_dimensions))
+        r2 = np.random.uniform(0, 1, (self.population_size, self.num_dimensions))
+        self.velocities = self.inertia_weight * self.velocities + \\
+                         self.cognitive_weight * r1 * (self.personal_best - self.population) + \\
+                         self.social_weight * r2 * (self.global_best - self.population)
+
+    def update_positions(self):
+        self.population += self.velocities
+
+    def update_personal_best(self):
+        for i in range(self.population_size):
+            if self.fitness_function(self.population[i]) < self.fitness_function(self.personal_best[i]):
+                self.personal_best[i] = self.population[i].copy()
+
+    def update_global_best(self):
+        best_index = np.argmin([self.fitness_function(x) for x in self.population])
+        self.global_best = self.population[best_index].copy()
+
+    def optimize(self, num_iterations):
+        for _ in range(num_iterations):
+            self.update_velocities()
+            self.update_positions()
+            self.update_personal_best()
+            self.update_global_best()
+        return self.global_best
